@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Echtzeit Stunden- & Geld-Tracker</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --success: #10b981;
+            --danger: #ef4444;
+            --background: #f3f4f6;
+            --card-bg: #ffffff;
+            --text: #1f2937;
+            --disabled: #9ca3af;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        body {
+            background-color: var(--background);
+            color: var(--text);
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 360px 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .container { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        h2 {
+            margin-bottom: 1.5rem;
+            font-size: 1.3rem;
+            border-bottom: 2px solid var(--background);
+            padding-bottom: 0.5rem;
+            color: #374151;
+        }
+
+        .wage-group {
+            margin-bottom: 1.5rem;
+        }
+        .wage-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #4b5563;
+            margin-bottom: 0.5rem;
+        }
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .input-wrapper input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: bold;
+            outline: none;
+        }
+        .input-wrapper .currency {
+            position: absolute;
+            right: 0.75rem;
+            font-weight: bold;
+            color: #6b7280;
+        }
+
+        .timer-display {
+            font-size: 3.5rem;
+            font-weight: bold;
+            text-align: center;
+            margin: 1rem 0 0.5rem 0;
+            font-variant-numeric: tabular-nums;
+            color: #111827;
+        }
+
+        .live-money-display {
+            text-align: center;
+            color: var(--success);
+            font-weight: bold;
+            font-size: 1.2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        button {
+            flex: 1;
+            padding: 0.85rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        button:active { transform: scale(0.98); }
+
+        .btn-start { background-color: var(--success); color: white; }
+        .btn-stop { background-color: var(--danger); color: white; }
+        
+        .btn-sync { 
+            background-color: var(--primary); 
+            color: white; 
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-sync.live-active {
+            background-color: #312e81;
+            box-shadow: 0 0 12px rgba(79, 70, 229, 0.5);
+        }
+
+        .btn-sync .live-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #4ade80;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.9); opacity: 1; }
+            50% { transform: scale(1.4); opacity: 0.4; }
+            100% { transform: scale(0.9); opacity: 1; }
+        }
+
+        button:disabled {
+            background-color: #e5e7eb !important;
+            color: var(--disabled) !important;
+            cursor: not-allowed;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .badge-display {
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .badge-time { background: #e0e7ff; color: var(--primary); }
+        .badge-money { background: #d1fae5; color: #065f46; }
+
+        .time-list {
+            list-style: none;
+            max-height: 300px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .time-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.85rem 0.5rem;
+            border-bottom: 1px solid var(--background);
+        }
+
+        .item-money { color: #059669; font-weight: 600; }
+        .delete-btn { background: none; color: var(--danger); width: auto; padding: 0 0.5rem; }
+        .btn-clear { background-color: transparent; color: #9ca3af; border: 1px solid #e5e7eb; margin-top: 1rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card">
+        <h2>💰 Einstellungen & Live-Uhr</h2>
+        
+        <div class="wage-group">
+            <label for="hourlyWage">Dein Stundenlohn:</label>
+            <div class="input-wrapper">
+                <input type="number" id="hourlyWage" value="25.00" step="0.50" min="0">
+                <span class="currency">€</span>
+            </div>
+        </div>
+
+        <div class="timer-display" id="display">00:00:00</div>
+        <div class="live-money-display" id="liveMoney">0,00 €</div>
+        
+        <div class="btn-group">
+            <button class="btn-start" id="startBtn">▶ Start</button>
+            <button class="btn-stop" id="stopBtn" disabled>⏸ Stopp</button>
+        </div>
+        
+        <button class="btn-sync" id="syncBtn" disabled>
+            <span>Synchronisieren</span>
+        </button>
+    </div>
+
+    <div class="card">
+        <h2>📊 Abgeschlossene Schichten (Cloud)</h2>
+        
+        <div class="stats-grid">
+            <div class="badge-display badge-time" id="totalTimeDisplay">00 Std. 00 Min.</div>
+            <div class="badge-display badge-money" id="totalMoneyDisplay">0,00 €</div>
+        </div>
+        
+        <ul class="time-list" id="timeList"></ul>
+        <button class="btn-clear" id="clearAllBtn" style="width: 100%;">🗑️ Cloud-Speicher leeren</button>
+    </div>
+</div>
+
+<script>
+    let startTime = 0;
+    let elapsedTime = 0;
+    let timerInterval;
+    let savedTimes = JSON.parse(localStorage.getItem('realtimeTimes')) || [];
+
+    const display = document.getElementById('display');
+    const liveMoney = document.getElementById('liveMoney');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const syncBtn = document.getElementById('syncBtn');
+    const hourlyWageInput = document.getElementById('hourlyWage');
+    const timeList = document.getElementById('timeList');
+    const totalTimeDisplay = document.getElementById('totalTimeDisplay');
+    const totalMoneyDisplay = document.getElementById('totalMoneyDisplay');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+
+    updateUI();
+
+    function timeToString(time) {
+        let hrs = Math.floor(time / 3600000);
+        let mins = Math.floor((time % 3600000) / 60000);
+        let secs = Math.floor((time % 60000) / 1000);
+        return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    }
+
+    function formatEuro(amount) {
+        return amount.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+    }
+
+    startBtn.addEventListener('click', () => {
+        startTime = Date.now() - elapsedTime;
+        
+        syncBtn.classList.add('live-active');
+        syncBtn.innerHTML = `<span class="live-dot"></span> Echtzeit-Sync läuft...`;
+        
+        timerInterval = setInterval(() => {
+            elapsedTime = Date.now() - startTime;
+            display.innerHTML = timeToString(elapsedTime);
+            
+            const currentWage = parseFloat(hourlyWageInput.value) || 0;
+            const currentSeconds = elapsedTime / 1000;
+            const currentEarned = (currentWage / 3600) * currentSeconds;
+            liveMoney.innerHTML = formatEuro(currentEarned);
+        }, 1000);
+        
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+    });
+
+    stopBtn.addEventListener('click', () => {
+        clearInterval(timerInterval);
+        
+        const secondsRecorded = Math.floor(elapsedTime / 1000);
+        const currentWage = parseFloat(hourlyWageInput.value) || 0;
+        const finalEarned = (currentWage / 3600) * secondsRecorded;
+
+        if (secondsRecorded > 0) {
+            const newEntry = {
+                id: Date.now(),
+                seconds: secondsRecorded,
+                wage: currentWage,
+                money: finalEarned,
+                date: new Date().toLocaleDateString('de-DE')
+            };
+
+            savedTimes.push(newEntry);
+            localStorage.setItem('realtimeTimes', JSON.stringify(savedTimes));
+        }
+
+        syncBtn.classList.remove('live-active');
+        syncBtn.innerHTML = `<span>Synchronisiert</span>`;
+        
+        setTimeout(() => {
+            syncBtn.innerHTML = `<span>Synchronisieren</span>`;
+            elapsedTime = 0;
+            display.innerHTML = "00:00:00";
+            liveMoney.innerHTML = "0,00 €";
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            updateUI();
+        }, 1000);
+    });
+
+    window.deleteItem = function(id) {
+        savedTimes = savedTimes.filter(item => item.id !== id);
+        localStorage.setItem('realtimeTimes', JSON.stringify(savedTimes));
+        updateUI();
+    }
+
+    clearAllBtn.addEventListener('click', () => {
+        if(confirm('Möchtest du alle Daten aus der Cloud-Liste löschen?')) {
+            savedTimes = [];
+            localStorage.setItem('realtimeTimes', JSON.stringify(savedTimes));
+            updateUI();
+        }
+    });
+
+    function updateUI() {
+        timeList.innerHTML = '';
+        let totalSeconds = 0;
+        let totalMoney = 0;
+
+        savedTimes.forEach((item, index) => {
+            totalSeconds += item.seconds;
+            totalMoney += item.money;
+            
+            const li = document.createElement('li');
+            li.className = 'time-item';
+            
+            const hrs = Math.floor(item.seconds / 3600);
+            const mins = Math.floor((item.seconds % 3600) / 60);
+            const secs = item.seconds % 60;
+
+            li.innerHTML = `
+                <div>
+                    <span><strong>Schicht #${index + 1}</strong> (${item.date})</span><br>
+                    <small style="color: #6b7280;">Dauer: ${hrs}h ${mins}m ${secs}s (zu ${item.wage.toFixed(2)}€/h)</small>
+                </div>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <span class="item-money">${formatEuro(item.money)}</span>
+                    <button class="delete-btn" onclick="deleteItem(${item.id})">✕</button>
+                </div>
+            `;
+            timeList.appendChild(li);
+        });
+
+        const totalHours = Math.floor(totalSeconds / 3600);
+        const totalMinutes = Math.floor((totalSeconds % 3600) / 60);
+        
+        totalTimeDisplay.innerHTML = `⏱️ ${totalHours} Std. ${totalMinutes} Min.`;
+        totalMoneyDisplay.innerHTML = `💶 ${formatEuro(totalMoney)}`;
+    }
+</script>
+
+</body>
+</html>
