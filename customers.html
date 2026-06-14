@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Pro Kunde - Aggregation</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --muted: #6b7280;
+            --bg: #f8fafc
+        }
+
+        body {
+            font-family: Segoe UI, system-ui, sans-serif;
+            background: var(--bg);
+            color: #111;
+            padding: 2rem;
+        }
+
+        .card {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 1.25rem;
+            border-radius: 10px;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06)
+        }
+
+        h1 {
+            display: flex;
+            gap: .75rem;
+            align-items: center;
+            font-size: 1.1rem
+        }
+
+        .controls {
+            display: flex;
+            gap: .5rem;
+            margin: 1rem 0;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .btn {
+            font-size: 0.9rem;
+            font-family: inherit;
+            padding: .5rem .8rem;
+            border-radius: 8px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .5rem;
+            box-sizing: border-box;
+            border: 1px solid transparent;
+            line-height: 1.2;
+            vertical-align: middle;
+            transition: background 0.15s ease;
+        }
+
+        .btn-secondary {
+            background: #fff;
+            color: #374151;
+            border: 1px solid #e5e7eb;
+            text-decoration: none;
+        }
+
+        .btn-secondary:hover {
+            background: #f9fafb;
+        }
+
+        .action-btn {
+            border: none;
+            padding: .3rem .5rem;
+            font-size: 0.9rem;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .muted {
+            color: var(--muted)
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: .75rem
+        }
+
+        th,
+        td {
+            padding: .6rem .5rem;
+            border-bottom: 1px solid #f1f5f9;
+            text-align: left
+        }
+
+        th {
+            background: #fbfdff;
+            font-weight: 700
+        }
+
+        .empty {
+            padding: 1rem;
+            color: var(--muted)
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1 style="width:100%;display:flex;align-items:center;justify-content:space-between">
+            <span>👥 Pro Kunde (Separate View)</span>
+            <a href="index.html" class="btn btn-secondary">◄ Zurück</a>
+        </h1>
+
+        <div class="controls">
+            <button id="exportBtn" class="btn btn-secondary">Exportieren</button>
+            <button id="clearAllBtn" class="btn btn-secondary" style="color:#dc2626;border-color:#fecaca">Alle löschen</button>
+        </div>
+
+        <table id="customerTable">
+            <thead>
+                <tr>
+                    <th>Kunde</th>
+                    <th>Schichten</th>
+                    <th>Gesamtzeit</th>
+                    <th>Gesamtbetrag</th>
+                    <th style="text-align:center;width:40px">Aktion</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="5" class="empty">Keine Datensätze vorhanden.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // Utility
+        function formatEuro(n) {
+            return Number(n).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+        }
+        if (!window.secondsToHms) {
+            window.secondsToHms = function(sec) {
+                const h = Math.floor(sec / 3600); const m = Math.floor((sec % 3600) / 60); return `${h}h ${m}m`;
+            };
+        }
+
+        function aggregateByCustomer(records) {
+            const map = new Map();
+            records.forEach(r => {
+                const key = r.customerId ?? r.customer_id ?? r.customerName ?? r.customer_name ?? r.name ?? 'Unbenannt';
+                const name = r.customerName ?? r.customer_name ?? r.name ?? `Kunde ${key}`;
+                const obj = map.get(key) || { name: name, shifts: 0, seconds: 0, money: 0 };
+                obj.shifts += 1;
+                obj.seconds += Number(r.seconds || 0);
+                obj.money += Number(r.money || 0);
+                map.set(key, obj);
+            });
+            return Array.from(map.values()).sort((a, b) => b.money - a.money);
+        }
+
+        function renderTable(records) {
+            const tbody = document.querySelector('#customerTable tbody');
+            tbody.innerHTML = '';
+            if (!records || records.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty">Keine Datensätze vorhanden.</td></tr>';
+                return;
+            }
+            const agg = aggregateByCustomer(records);
+            agg.forEach((r, idx) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${escapeHtml(r.name)}</td><td>${r.shifts}</td><td>${secondsToHms(r.seconds)}</td><td>${formatEuro(r.money)}</td><td style="text-align:center; display:flex; gap:4px; justify-content:center;"><button class="action-btn edit-btn" data-idx="${idx}" title="Name ändern" style="background:#f59e0b;">✎</button><button class="action-btn delete-btn" data-idx="${idx}" title="Alle Datensätze dieses Kunden löschen" style="background:#dc2626;">×</button></td>`;
+                tbody.appendChild(tr);
+            });
+            
+            const aggList = aggregateByCustomer(records);
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.currentTarget.dataset.idx);
+                    const targetName = aggList[idx].name;
+                    const newName = prompt('Neuen Kundennamen eingeben:', targetName);
+                    if (!newName) return;
+                    window.records = window.records.map(r => {
+                        const key = r.customerId ?? r.customer_id ?? r.customerName ?? r.customer_name ?? r.name ?? 'Unbenannt';
+                        const name = r.customerName ?? r.customer_name ?? r.name ?? `Kunde ${key}`;
+                        if (name === targetName) {
+                            return { ...r, customerName: newName };
+                        }
+                        return r;
+                    });
+                    saveRecords();
+                    renderTable(window.records);
+                });
+            });
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.currentTarget.dataset.idx);
+                    const targetName = aggList[idx].name;
+                    if (!confirm(`Alle Einträge für "${targetName}" wirklich löschen?`)) return;
+                    window.records = window.records.filter(r => {
+                        const key = r.customerId ?? r.customer_id ?? r.customerName ?? r.customer_name ?? r.name ?? 'Unbenannt';
+                        const name = r.customerName ?? r.customer_name ?? r.name ?? `Kunde ${key}`;
+                        return name !== targetName;
+                    });
+                    saveRecords();
+                    renderTable(window.records);
+                });
+            });
+        }
+
+        function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": "&#39;" })[c]); }
+
+        if (!window.saveRecords) {
+            window.saveRecords = function() {
+                localStorage.setItem('customerRecords', JSON.stringify(window.records));
+            }
+        }
+
+        window.records = JSON.parse(localStorage.getItem('customerRecords')) || [];
+
+        renderTable(window.records);
+
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            const blob = new Blob([JSON.stringify(window.records, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'kunden-daten.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        });
+
+        document.getElementById('clearAllBtn').addEventListener('click', () => {
+            if (confirm('Alle Kundendaten wirklich löschen?')) {
+                window.records = [];
+                saveRecords();
+                renderTable(window.records);
+            }
+        });
+    </script>
+</body>
+
+</html>
